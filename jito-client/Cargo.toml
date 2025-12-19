@@ -16,3 +16,4 @@ solana-transaction-status = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
+solana-commitment-config = "3.1.0"

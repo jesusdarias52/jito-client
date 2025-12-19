@@ -1755,6 +1755,7 @@ dependencies = [
  "log",
  "prost-types",
  "solana-client",
+ "solana-commitment-config",
  "solana-metrics",
  "solana-sdk",
  "solana-transaction-status",

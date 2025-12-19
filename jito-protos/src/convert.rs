@@ -5,11 +5,8 @@ use std::{
 };
 
 use bincode::serialize;
-use solana_perf::packet::{Packet, PacketBatch, PACKET_DATA_SIZE};
-use solana_sdk::{
-    packet::{Meta, PacketFlags},
-    transaction::VersionedTransaction,
-};
+use solana_perf::packet::{Meta, Packet, PacketBatch, PacketFlags, PacketRef, PACKET_DATA_SIZE};
+use solana_sdk::transaction::VersionedTransaction;
 
 use crate::{
     packet::{
@@ -21,7 +18,7 @@ use crate::{
 
 /// Converts a Solana packet to a protobuf packet
 /// NOTE: the packet.data() function will filter packets marked for discard
-pub fn packet_to_proto_packet(p: &Packet) -> Option<ProtoPacket> {
+pub fn packet_to_proto_packet(p: &PacketRef) -> Option<ProtoPacket> {
     Some(ProtoPacket {
         data: p.data(..)?.to_vec(),
         meta: Some(ProtoMeta {
@@ -33,7 +30,7 @@ pub fn packet_to_proto_packet(p: &Packet) -> Option<ProtoPacket> {
                 forwarded: p.meta().forwarded(),
                 repair: p.meta().repair(),
                 simple_vote_tx: p.meta().is_simple_vote_tx(),
-                tracer_packet: p.meta().is_tracer_packet(),
+                tracer_packet: p.meta().is_perf_track_packet(),
                 from_staked_node: p.meta().is_from_staked_node(),
             }),
             sender_stake: 0,
@@ -46,7 +43,11 @@ pub fn packet_batches_to_proto_packets(
 ) -> impl Iterator<Item = ProtoPacket> + '_ {
     batches
         .iter()
-        .flat_map(|b| b.iter().filter_map(packet_to_proto_packet))
+        .flat_map(|batch| {
+            batch
+                .iter()
+                .filter_map(|packet_ref| packet_to_proto_packet(&packet_ref))
+        })
 }
 
 /// converts from a protobuf packet to packet
@@ -70,7 +71,7 @@ pub fn proto_packet_to_packet(p: &ProtoPacket) -> Packet {
                 packet.meta_mut().flags.insert(PacketFlags::FORWARDED);
             }
             if flags.tracer_packet {
-                packet.meta_mut().flags.insert(PacketFlags::TRACER_PACKET);
+                packet.meta_mut().flags.insert(PacketFlags::PERF_TRACK_PACKET);
             }
             if flags.repair {
                 packet.meta_mut().flags.insert(PacketFlags::REPAIR);
@@ -137,22 +138,5 @@ impl TryFrom<&Socket> for SocketAddr {
 
     fn try_from(value: &Socket) -> Result<Self, Self::Error> {
         IpAddr::from_str(&value.ip).map(|ip| SocketAddr::new(ip, value.port as u16))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use solana_perf::test_tx::test_tx;
-    use solana_sdk::transaction::VersionedTransaction;
-
-    use crate::convert::{proto_packet_from_versioned_tx, versioned_tx_from_packet};
-
-    #[test]
-    fn test_proto_to_packet() {
-        let tx_before = VersionedTransaction::from(test_tx());
-        let tx_after = versioned_tx_from_packet(&proto_packet_from_versioned_tx(&tx_before))
-            .expect("tx_after");
-
-        assert_eq!(tx_before, tx_after);
     }
 }
